@@ -1,4 +1,28 @@
 AWSTemplateFormatVersion: '2010-09-09'
+
+Parameters:
+  SystemName:
+    Type: String
+    Default: wordpress-sample
+  SystemListenPort:
+    Type: Number
+    Default: 80
+  InstanceKeyName:
+    Type: String
+    Default: wordpress-key-pair
+  InstanceType:
+    Type: String
+    Default: t2.micro
+  AmiImageId:
+    Type: String
+    Default: ami-0ff21806645c5e492
+  AvailabilityZoneA:
+    Type: String
+    Default: ap-northeast-1a
+  AvailabilityZoneB:
+    Type: String
+    Default: ap-northeast-1c
+
 Resources:
   WordpressVPC:
     Type: AWS::EC2::VPC
@@ -6,13 +30,13 @@ Resources:
       CidrBlock: 10.0.0.0/16
       Tags:
         - Key: Name
-          Value: WordpressVPC
+          Value: !Join ["-", [!Ref SystemName, "vpc"]]
   InternetGateway:
     Type: AWS::EC2::InternetGateway
     Properties:
       Tags:
         - Key: Name
-          Value: WordpressVPC-InternetGateway
+          Value: !Join ["-", [!Ref SystemName, "igw"]]
   AttachInternetGateway:
     Type: AWS::EC2::VPCGatewayAttachment
     Properties:
@@ -21,23 +45,23 @@ Resources:
   WebSubnetA:
     Type: AWS::EC2::Subnet
     Properties:
-      AvailabilityZone: ap-northeast-1a
+      AvailabilityZone: !Ref AvailabilityZoneA
       CidrBlock: 10.0.1.0/24
       MapPublicIpOnLaunch: true
       VpcId: !Ref WordpressVPC
       Tags:
         - Key: Name
-          Value: WordpressVPC-WebSubnetA
+          Value: !Join ["-", [!Ref SystemName, "web", "subnetA"]]
   WebSubnetB:
     Type: AWS::EC2::Subnet
     Properties:
-      AvailabilityZone: ap-northeast-1c
+      AvailabilityZone: !Ref AvailabilityZoneB
       CidrBlock: 10.0.2.0/24
       MapPublicIpOnLaunch: true
       VpcId: !Ref WordpressVPC
       Tags:
         - Key: Name
-          Value: WordpressVPC-WebSubnetB
+          Value: !Join ["-", [!Ref SystemName, "web", "subnetB"]]
   WebRouteTable:
     Type: AWS::EC2::RouteTable
     DependsOn: AttachInternetGateway
@@ -45,10 +69,9 @@ Resources:
       VpcId: !Ref WordpressVPC
       Tags:
         - Key: Name
-          Value: WordpressVPC-WebRouteTable
+          Value: !Join ["-", [!Ref SystemName, "web", "rtb"]]
   WebRoute:
     Type: AWS::EC2::Route
-    DependsOn: AttachInternetGateway
     Properties:
       RouteTableId: !Ref WebRouteTable
       DestinationCidrBlock: 0.0.0.0/0
@@ -66,35 +89,39 @@ Resources:
   WebELBSG:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: WordpressVPC-elb-sg
+      GroupName: !Join ["-", [!Ref SystemName, "elb", "sg"]]
       GroupDescription: sg for elb
       VpcId: !Ref WordpressVPC
       SecurityGroupIngress:
         - IpProtocol: tcp
-          FromPort: 80
-          ToPort: 80
+          FromPort: !Ref SystemListenPort
+          ToPort: !Ref SystemListenPort
           CidrIp: 0.0.0.0/0
       Tags:
         - Key: Name
-          Value: WordpressVPC-elb-sg
+          Value: !Join ["-", [!Ref SystemName, "elb", "sg"]]
   WebInstanceSG:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: WordpressVPC-web-sg
-      GroupDescription: sg for instances
+      GroupName: !Join ["-", [!Ref SystemName, "web", "sg"]]
+      GroupDescription: sg for web instances
       VpcId: !Ref WordpressVPC
       SecurityGroupIngress:
         - IpProtocol: tcp
-          FromPort: 80
-          ToPort: 80
+          FromPort: !Ref SystemListenPort
+          ToPort: !Ref SystemListenPort
           SourceSecurityGroupId: !Ref WebELBSG
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
       Tags:
         - Key: Name
-          Value: WordpressVPC-web-sg
+          Value: !Join ["-", [!Ref SystemName, "web", "sg"]]
   WebELB:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
-      Name: elb-wordpress
+      Name: !Join ["-", [!Ref SystemName, "elb"]]
       SecurityGroups:
         - !Ref WebELBSG
       Subnets:
@@ -102,23 +129,23 @@ Resources:
         - !Ref WebSubnetB
       Tags:
         - Key: Name
-          Value: WordpressVPC-elb
+          Value: !Join ["-", [!Ref SystemName, "elb"]]
   WebELBTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      Name: elb-tg-wordpress
+      Name: !Join ["-", [!Ref SystemName, "elb", "tg"]]
       VpcId: !Ref WordpressVPC
-      Port: 80
+      Port: !Ref SystemListenPort
       Protocol: HTTP
       HealthCheckEnabled: true
-      HealthCheckPort: 80
+      HealthCheckPort: !Ref SystemListenPort
       Matcher:
         HttpCode: 200
       TargetType: instance
   WebELBListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
-      Port: 80
+      Port: !Ref SystemListenPort
       Protocol: HTTP
       LoadBalancerArn: !Ref WebELB
       DefaultActions:
@@ -127,11 +154,11 @@ Resources:
   AutoScalingGroupConf:
     Type: AWS::AutoScaling::LaunchConfiguration
     Properties:
-      ImageId: ami-0ff21806645c5e492
+      ImageId: !Ref AmiImageId
       SecurityGroups:
         - !Ref WebInstanceSG
-      InstanceType: t2.micro
-      KeyName: wordpress-key-pair
+      InstanceType: !Ref InstanceType
+      KeyName: !Ref InstanceKeyName
       UserData:
         Fn::Base64: |
           yum -y update
@@ -142,7 +169,7 @@ Resources:
   AutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
-      AutoScalingGroupName: asg-wordpress
+      AutoScalingGroupName: !Join ["-", [!Ref SystemName, "asg"]]
       MinSize: 1
       MaxSize: 3
       LaunchConfigurationName: !Ref AutoScalingGroupConf
@@ -151,38 +178,6 @@ Resources:
         - !Ref WebSubnetB
       TargetGroupARNs:
         - !Ref WebELBTargetGroup
-
-
-#  DBSubnet:
-#    Type: AWS::EC2::Subnet
-#    DependsOn: AttachInternetGateway
-#    Properties:
-#      CidrBlock: 10.0.2.0/24
-#      MapPublicIpOnLaunch: true
-#      VpcId: !Ref WordpressVPC
-#      Tags:
-#        - Key: Name
-#          Value: WordpressVPC-DBSubnet
-#  DBRouteTable:
-#    Type: AWS::EC2::RouteTable
-#    DependsOn: AttachInternetGateway
-#    Properties:
-#      VpcId: !Ref WordpressVPC
-#      Tags:
-#        - Key: Name
-#          Value: WordpressVPC-DBRouteTable
-#  DBRoute:
-#    Type: AWS::EC2::Route
-#    DependsOn: AttachInternetGateway
-#    Properties:
-#      RouteTableId: !Ref DBRouteTable
-#      DestinationCidrBlock: 0.0.0.0/0
-#      GatewayId: !Ref InternetGateway
-#  DBSubnetAssociateRouteTable:
-#    Type: AWS::EC2::SubnetRouteTableAssociation
-#    Properties:
-#      SubnetId: !Ref DBSubnet
-#      RouteTableId: !Ref DBRouteTable
 
 
 
