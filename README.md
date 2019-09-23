@@ -1,7 +1,7 @@
 # aws-wordpress
 
 ## Synopsis
-This repository has three templates to create scalable wordpress system.
+This repository has three template samples to create secure and scalable wordpress system.
 
 1. First template creates the system using ALB + AutoScalingGroup + EC2 + RDS.  
 2. Second template creates the system using ECS + EC2.
