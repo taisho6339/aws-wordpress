@@ -171,7 +171,7 @@ Resources:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
       AutoScalingGroupName: !Join ["-", [!Ref SystemName, "asg"]]
-      MinSize: 1
+      MinSize: 2
       MaxSize: 3
       LaunchConfigurationName: !Ref AutoScalingGroupConf
       VPCZoneIdentifier:
