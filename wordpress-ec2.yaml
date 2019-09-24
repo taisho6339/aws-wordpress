@@ -1,27 +1,23 @@
 AWSTemplateFormatVersion: '2010-09-09'
 
+Mappings:
+  dev:
+    SystemProperties:
+      Name: wordpress-sample
+    WebInstanceProperties:
+      Port: 80
+      KeyName: wordpress-key-pair
+      InstanceType: t2.micro
+      AmiImageId: ami-0ff21806645c5e492
+      AvailabilityZoneA: ap-northeast-1a
+      AvailabilityZoneB: ap-northeast-1c
+
 Parameters:
-  SystemName:
+  Env:
     Type: String
-    Default: wordpress-sample
-  SystemListenPort:
-    Type: Number
-    Default: 80
-  InstanceKeyName:
-    Type: String
-    Default: wordpress-key-pair
-  InstanceType:
-    Type: String
-    Default: t2.micro
-  AmiImageId:
-    Type: String
-    Default: ami-0ff21806645c5e492
-  AvailabilityZoneA:
-    Type: String
-    Default: ap-northeast-1a
-  AvailabilityZoneB:
-    Type: String
-    Default: ap-northeast-1c
+    Default: dev
+    AllowedValues:
+      - dev
 
 Resources:
   WordpressVPC:
@@ -30,13 +26,13 @@ Resources:
       CidrBlock: 10.0.0.0/16
       Tags:
         - Key: Name
-          Value: !Join ["-", [!Ref SystemName, "vpc"]]
+          Value: !Join ["-", [!FindInMap [!Ref Env, SystemProperties, Name], "vpc"]]
   InternetGateway:
     Type: AWS::EC2::InternetGateway
     Properties:
       Tags:
         - Key: Name
-          Value: !Join ["-", [!Ref SystemName, "igw"]]
+          Value: !Join ["-", [!FindInMap [!Ref Env, SystemProperties, Name], "igw"]]
   AttachInternetGateway:
     Type: AWS::EC2::VPCGatewayAttachment
     Properties:
@@ -45,23 +41,23 @@ Resources:
   WebSubnetA:
     Type: AWS::EC2::Subnet
     Properties:
-      AvailabilityZone: !Ref AvailabilityZoneA
+      AvailabilityZone: !FindInMap [!Ref Env, WebInstanceProperties, AvailabilityZoneA]
       CidrBlock: 10.0.1.0/24
       MapPublicIpOnLaunch: true
       VpcId: !Ref WordpressVPC
       Tags:
         - Key: Name
-          Value: !Join ["-", [!Ref SystemName, "web", "subnetA"]]
+          Value: !Join ["-", [!FindInMap [!Ref Env, SystemProperties, Name], "web", "subnetA"]]
   WebSubnetB:
     Type: AWS::EC2::Subnet
     Properties:
-      AvailabilityZone: !Ref AvailabilityZoneB
+      AvailabilityZone: !FindInMap [!Ref Env, WebInstanceProperties, AvailabilityZoneB]
       CidrBlock: 10.0.2.0/24
       MapPublicIpOnLaunch: true
       VpcId: !Ref WordpressVPC
       Tags:
         - Key: Name
-          Value: !Join ["-", [!Ref SystemName, "web", "subnetB"]]
+          Value: !Join ["-", [!FindInMap [!Ref Env, SystemProperties, Name], "web", "subnetB"]]
   WebRouteTable:
     Type: AWS::EC2::RouteTable
     DependsOn: AttachInternetGateway
@@ -69,7 +65,7 @@ Resources:
       VpcId: !Ref WordpressVPC
       Tags:
         - Key: Name
-          Value: !Join ["-", [!Ref SystemName, "web", "rtb"]]
+          Value: !Join ["-", [!FindInMap [!Ref Env, SystemProperties, Name], "web", "rtb"]]
   WebRoute:
     Type: AWS::EC2::Route
     Properties:
@@ -89,27 +85,27 @@ Resources:
   WebELBSG:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Join ["-", [!Ref SystemName, "elb", "sg"]]
+      GroupName: !Join ["-", [!FindInMap [!Ref Env, SystemProperties, Name], "elb", "sg"]]
       GroupDescription: sg for elb
       VpcId: !Ref WordpressVPC
       SecurityGroupIngress:
         - IpProtocol: tcp
-          FromPort: !Ref SystemListenPort
-          ToPort: !Ref SystemListenPort
+          FromPort: !FindInMap [!Ref Env, WebInstanceProperties, Port]
+          ToPort: !FindInMap [!Ref Env, WebInstanceProperties, Port]
           CidrIp: 0.0.0.0/0
       Tags:
         - Key: Name
-          Value: !Join ["-", [!Ref SystemName, "elb", "sg"]]
+          Value: !Join ["-", [!FindInMap [!Ref Env, SystemProperties, Name], "elb", "sg"]]
   WebInstanceSG:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Join ["-", [!Ref SystemName, "web", "sg"]]
+      GroupName: !Join ["-", [!FindInMap [!Ref Env, SystemProperties, Name], "web", "sg"]]
       GroupDescription: sg for web instances
       VpcId: !Ref WordpressVPC
       SecurityGroupIngress:
         - IpProtocol: tcp
-          FromPort: !Ref SystemListenPort
-          ToPort: !Ref SystemListenPort
+          FromPort: !FindInMap [!Ref Env, WebInstanceProperties, Port]
+          ToPort: !FindInMap [!Ref Env, WebInstanceProperties, Port]
           SourceSecurityGroupId: !Ref WebELBSG
         - IpProtocol: tcp
           FromPort: 22
@@ -117,11 +113,11 @@ Resources:
           CidrIp: 0.0.0.0/0
       Tags:
         - Key: Name
-          Value: !Join ["-", [!Ref SystemName, "web", "sg"]]
+          Value: !Join ["-", [!FindInMap [!Ref Env, SystemProperties, Name], "web", "sg"]]
   WebELB:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
-      Name: !Join ["-", [!Ref SystemName, "elb"]]
+      Name: !Join ["-", [!FindInMap [!Ref Env, SystemProperties, Name], "elb"]]
       SecurityGroups:
         - !Ref WebELBSG
       Subnets:
@@ -129,23 +125,23 @@ Resources:
         - !Ref WebSubnetB
       Tags:
         - Key: Name
-          Value: !Join ["-", [!Ref SystemName, "elb"]]
+          Value: !Join ["-", [!FindInMap [!Ref Env, SystemProperties, Name], "elb"]]
   WebELBTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      Name: !Join ["-", [!Ref SystemName, "elb", "tg"]]
+      Name: !Join ["-", [!FindInMap [!Ref Env, SystemProperties, Name], "elb", "tg"]]
       VpcId: !Ref WordpressVPC
-      Port: !Ref SystemListenPort
+      Port: !FindInMap [!Ref Env, WebInstanceProperties, Port]
       Protocol: HTTP
       HealthCheckEnabled: true
-      HealthCheckPort: !Ref SystemListenPort
+      HealthCheckPort: !FindInMap [!Ref Env, WebInstanceProperties, Port]
       Matcher:
         HttpCode: 200
       TargetType: instance
   WebELBListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
-      Port: !Ref SystemListenPort
+      Port: !FindInMap [!Ref Env, WebInstanceProperties, Port]
       Protocol: HTTP
       LoadBalancerArn: !Ref WebELB
       DefaultActions:
@@ -154,11 +150,11 @@ Resources:
   AutoScalingGroupConf:
     Type: AWS::AutoScaling::LaunchConfiguration
     Properties:
-      ImageId: !Ref AmiImageId
+      ImageId: !FindInMap [!Ref Env, WebInstanceProperties, AmiImageId]
       SecurityGroups:
         - !Ref WebInstanceSG
-      InstanceType: !Ref InstanceType
-      KeyName: !Ref InstanceKeyName
+      InstanceType: !FindInMap [!Ref Env, WebInstanceProperties, InstanceType]
+      KeyName: !FindInMap [!Ref Env, WebInstanceProperties, KeyName]
       UserData:
         Fn::Base64: |
           #!/bin/bash
@@ -170,7 +166,7 @@ Resources:
   AutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
-      AutoScalingGroupName: !Join ["-", [!Ref SystemName, "asg"]]
+      AutoScalingGroupName: !Join ["-", [!FindInMap [!Ref Env, SystemProperties, Name], "asg"]]
       MinSize: 2
       MaxSize: 3
       LaunchConfigurationName: !Ref AutoScalingGroupConf
